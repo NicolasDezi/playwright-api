@@ -31,7 +31,9 @@ app.get("/health", (req, res) => {
 });
 
 /**
+ * -------------------------------------------------
  * 1. CREAR SESIÓN
+ * -------------------------------------------------
  */
 app.post("/session/create", async (req, res) => {
     try {
@@ -53,7 +55,9 @@ app.post("/session/create", async (req, res) => {
 });
 
 /**
+ * -------------------------------------------------
  * 2. EJECUTAR ACCIONES
+ * -------------------------------------------------
  */
 app.post("/run", async (req, res) => {
     try {
@@ -88,7 +92,9 @@ app.post("/run", async (req, res) => {
 });
 
 /**
+ * -------------------------------------------------
  * 3. CERRAR SESIÓN
+ * -------------------------------------------------
  */
 app.post("/session/close", async (req, res) => {
     try {
@@ -120,7 +126,9 @@ app.post("/session/close", async (req, res) => {
 });
 
 /**
- * START SERVER
+ * -------------------------------------------------
+ * START SERVER (IMPORTANT FIX)
+ * -------------------------------------------------
  */
 const PORT = process.env.PORT || 8080;
 
@@ -132,7 +140,7 @@ const server = app.listen(PORT, "0.0.0.0", () => {
 });
 
 /**
- * Graceful shutdown
+ * Graceful shutdown (FIXED)
  */
 process.on("SIGTERM", () => {
     console.log("SIGTERM received. Closing server...");
