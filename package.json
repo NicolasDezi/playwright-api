@@ -1,0 +1,9 @@
+{
+  "name": "playwright-api",
+  "version": "1.0.0",
+  "main": "server.js",
+  "dependencies": {
+    "express": "^5.1.0",
+    "playwright": "^1.61.0"
+  }
+}
