@@ -60,7 +60,7 @@ app.get("/test", async (req, res) => {
 /**
  * Start server
  */
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 80;
 
 app.listen(PORT, () => {
     console.log(`Servidor iniciado en puerto ${PORT}`);
