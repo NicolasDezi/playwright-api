@@ -128,10 +128,10 @@ app.post("/session/close", async (req, res) => {
  */
 const PORT = process.env.PORT || 8080;
 
-const server = app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
     console.log("====================================");
     console.log("🚀 Playwright API running");
-    console.log(`🌐 Port: ${PORT}`);
+    console.log("🌐 Port:", PORT);
     console.log("====================================");
 });
 
