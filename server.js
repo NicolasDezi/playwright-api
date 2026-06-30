@@ -57,6 +57,28 @@ app.get("/test", async (req, res) => {
     }
 });
 
+
+app.post("/title", async (req, res) => {
+
+    const browser = await chromium.launch({
+        headless: true,
+        args: ["--no-sandbox","--disable-setuid-sandbox"]
+    });
+
+    const page = await browser.newPage();
+
+    await page.goto(req.body.url);
+
+    const title = await page.title();
+
+    await browser.close();
+
+    res.json({
+        title
+    });
+
+});
+
 /**
  * Start server
  */
