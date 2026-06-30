@@ -7,7 +7,7 @@ const {
 
 const {
     executeActions
-} = require("./actionExecutor");
+} = require("./services/actionExecutor");
 
 const app = express();
 
