@@ -121,6 +121,14 @@ app.post("/session/close", async (req, res) => {
     }
 });
 
+
+app.get("/health", (req, res) => {
+    res.status(200).json({
+        ok: true,
+        uptime: process.uptime()
+    });
+});
+
 /**
  * -------------------------------------------------
  * START SERVER (EASYPANEL READY)
