@@ -4,8 +4,7 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# mejor que npm install en CI containers
-RUN npm ci
+RUN npm install
 
 COPY . .
 
