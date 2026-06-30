@@ -5,30 +5,63 @@ const app = express();
 
 app.use(express.json());
 
+/**
+ * Health check
+ */
 app.get("/", (req, res) => {
     res.send("Playwright OK");
 });
 
+/**
+ * Playwright test endpoint
+ */
 app.get("/test", async (req, res) => {
-    const browser = await chromium.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"]
-    });
+    let browser = null;
 
-    const page = await browser.newPage();
+    try {
+        browser = await chromium.launch({
+            headless: true,
+            args: [
+                "--no-sandbox",
+                "--disable-setuid-sandbox"
+            ]
+        });
 
-    await page.goto("https://www.google.com");
+        const page = await browser.newPage();
 
-    const title = await page.title();
+        await page.goto("https://www.google.com", {
+            waitUntil: "domcontentloaded"
+        });
 
-    await browser.close();
+        const title = await page.title();
 
-    res.json({
-        ok: true,
-        title
-    });
+        await browser.close();
+        browser = null;
+
+        res.json({
+            ok: true,
+            title
+        });
+
+    } catch (error) {
+        if (browser) {
+            await browser.close();
+        }
+
+        console.error("Playwright error:", error);
+
+        res.status(500).json({
+            ok: false,
+            error: error.message
+        });
+    }
 });
 
-app.listen(3000, () => {
-    console.log("Servidor iniciado en puerto 3000");
+/**
+ * Start server
+ */
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+    console.log(`Servidor iniciado en puerto ${PORT}`);
 });
