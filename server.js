@@ -1,89 +1,29 @@
+require("dotenv").config();
+
 const express = require("express");
-const { chromium } = require("playwright");
+const cors = require("cors");
+const helmet = require("helmet");
+const morgan = require("morgan");
+
+const runRoute = require("./routes/run");
+const healthRoute = require("./routes/health");
 
 const app = express();
 
-app.use(express.json());
+app.use(cors());
+app.use(helmet());
+app.use(express.json({ limit: "10mb" }));
+app.use(morgan("dev"));
 
-/**
- * Health check
- */
 app.get("/", (req, res) => {
-    res.send("Playwright OK");
+    res.json({ ok: true, service: "playwright-engine" });
 });
 
-/**
- * Playwright test endpoint
- */
-app.get("/test", async (req, res) => {
-    let browser = null;
+app.use("/run", runRoute);
+app.use("/health", healthRoute);
 
-    try {
-        browser = await chromium.launch({
-            headless: true,
-            args: [
-                "--no-sandbox",
-                "--disable-setuid-sandbox"
-            ]
-        });
-
-        const page = await browser.newPage();
-
-        await page.goto("https://www.google.com", {
-            waitUntil: "domcontentloaded"
-        });
-
-        const title = await page.title();
-
-        await browser.close();
-        browser = null;
-
-        res.json({
-            ok: true,
-            title
-        });
-
-    } catch (error) {
-        if (browser) {
-            await browser.close();
-        }
-
-        console.error("Playwright error:", error);
-
-        res.status(500).json({
-            ok: false,
-            error: error.message
-        });
-    }
-});
-
-
-app.post("/title", async (req, res) => {
-
-    const browser = await chromium.launch({
-        headless: true,
-        args: ["--no-sandbox","--disable-setuid-sandbox"]
-    });
-
-    const page = await browser.newPage();
-
-    await page.goto(req.body.url);
-
-    const title = await page.title();
-
-    await browser.close();
-
-    res.json({
-        title
-    });
-
-});
-
-/**
- * Start server
- */
-const PORT = process.env.PORT || 80;
+const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-    console.log(`Servidor iniciado en puerto ${PORT}`);
+    console.log(`🚀 Playwright Engine running on port ${PORT}`);
 });
