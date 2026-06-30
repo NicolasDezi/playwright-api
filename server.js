@@ -23,11 +23,15 @@ app.get("/", (req, res) => {
     res.send("Playwright API OK");
 });
 
+app.get("/health", (req, res) => {
+    res.status(200).json({
+        ok: true,
+        uptime: process.uptime()
+    });
+});
+
 /**
- * -------------------------------------------------
  * 1. CREAR SESIÓN
- * -------------------------------------------------
- * POST /session/create
  */
 app.post("/session/create", async (req, res) => {
     try {
@@ -49,10 +53,7 @@ app.post("/session/create", async (req, res) => {
 });
 
 /**
- * -------------------------------------------------
  * 2. EJECUTAR ACCIONES
- * -------------------------------------------------
- * POST /run
  */
 app.post("/run", async (req, res) => {
     try {
@@ -87,10 +88,7 @@ app.post("/run", async (req, res) => {
 });
 
 /**
- * -------------------------------------------------
  * 3. CERRAR SESIÓN
- * -------------------------------------------------
- * POST /session/close
  */
 app.post("/session/close", async (req, res) => {
     try {
@@ -121,22 +119,12 @@ app.post("/session/close", async (req, res) => {
     }
 });
 
-
-app.get("/health", (req, res) => {
-    res.status(200).json({
-        ok: true,
-        uptime: process.uptime()
-    });
-});
-
 /**
- * -------------------------------------------------
- * START SERVER (EASYPANEL READY)
- * -------------------------------------------------
+ * START SERVER
  */
 const PORT = process.env.PORT || 8080;
 
-app.listen(PORT, "0.0.0.0", () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
     console.log("====================================");
     console.log("🚀 Playwright API running");
     console.log("🌐 Port:", PORT);
@@ -144,10 +132,11 @@ app.listen(PORT, "0.0.0.0", () => {
 });
 
 /**
- * Graceful shutdown (PRO)
+ * Graceful shutdown
  */
 process.on("SIGTERM", () => {
     console.log("SIGTERM received. Closing server...");
+
     server.close(() => {
         console.log("Server closed.");
         process.exit(0);
