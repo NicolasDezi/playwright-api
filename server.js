@@ -3,6 +3,11 @@ const { chromium } = require("playwright");
 
 const app = express();
 
+const browser = await chromium.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+});
+
 app.use(express.json());
 
 app.get("/", (req, res) => {

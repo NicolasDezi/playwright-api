@@ -4,10 +4,11 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install
+# mejor que npm install en CI containers
+RUN npm ci
 
 COPY . .
 
 EXPOSE 3000
 
-CMD ["node","server.js"]
+CMD ["node", "server.js"]
