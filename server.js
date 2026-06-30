@@ -3,11 +3,6 @@ const { chromium } = require("playwright");
 
 const app = express();
 
-const browser = await chromium.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"]
-});
-
 app.use(express.json());
 
 app.get("/", (req, res) => {
@@ -15,9 +10,9 @@ app.get("/", (req, res) => {
 });
 
 app.get("/test", async (req, res) => {
-
     const browser = await chromium.launch({
-        headless: true
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox"]
     });
 
     const page = await browser.newPage();
@@ -32,9 +27,8 @@ app.get("/test", async (req, res) => {
         ok: true,
         title
     });
-
 });
 
 app.listen(3000, () => {
-    console.log("Servidor iniciado");
+    console.log("Servidor iniciado en puerto 3000");
 });
