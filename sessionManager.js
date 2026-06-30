@@ -1,20 +1,20 @@
 const { chromium } = require("playwright");
+const { v4: uuidv4 } = require("uuid");
 
 const sessions = new Map();
 
 /**
- * Crear sesión nueva
+ * CREATE SESSION (persistent browser)
  */
 async function createSession() {
+    const sessionId = uuidv4();
+
     const browser = await chromium.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"]
+        headless: true
     });
 
     const context = await browser.newContext();
     const page = await context.newPage();
-
-    const sessionId = generateId();
 
     sessions.set(sessionId, {
         browser,
@@ -23,24 +23,26 @@ async function createSession() {
         createdAt: Date.now()
     });
 
+    console.log(`[SESSION CREATED] ${sessionId}`);
+
     return sessionId;
 }
 
 /**
- * Obtener page de sesión
+ * GET SESSION
  */
-function getPage(sessionId) {
+function getSession(sessionId) {
     const session = sessions.get(sessionId);
 
     if (!session) {
-        throw new Error("Session not found");
+        throw new Error(`Session not found: ${sessionId}`);
     }
 
-    return session.page;
+    return session;
 }
 
 /**
- * Cerrar sesión
+ * CLOSE SESSION
  */
 async function closeSession(sessionId) {
     const session = sessions.get(sessionId);
@@ -49,21 +51,17 @@ async function closeSession(sessionId) {
 
     try {
         await session.browser.close();
-    } catch (e) {}
+    } catch (err) {
+        console.error("Error closing browser:", err.message);
+    }
 
     sessions.delete(sessionId);
-}
 
-/**
- * Generador simple de ID
- */
-function generateId() {
-    return Math.random().toString(36).substring(2, 10);
+    console.log(`[SESSION CLOSED] ${sessionId}`);
 }
 
 module.exports = {
     createSession,
-    getPage,
-    closeSession,
-    sessions
+    getSession,
+    closeSession
 };

@@ -1,162 +1,98 @@
-const { getPage, closeSession } = require("./sessionManager");
+const path = require("path");
+const fs = require("fs");
 
-/**
- * Ejecuta una lista de acciones sobre una sesión Playwright
- */
-async function executeActions(actions, sessionId = null) {
+const {
+    getSession
+} = require("../sessionManager");
 
-    const page = getPage(sessionId);
+async function executeActions(actions, sessionId, options = {}) {
+
+    const session = getSession(sessionId);
+    const page = session.page;
 
     const results = [];
-    const startTime = Date.now();
+
+    const screenshotDir = path.join(__dirname, "..", "screenshots");
+
+    if (!fs.existsSync(screenshotDir)) {
+        fs.mkdirSync(screenshotDir, { recursive: true });
+    }
 
     for (let i = 0; i < actions.length; i++) {
-
         const action = actions[i];
 
         try {
-            let result = null;
+            let result = {
+                step: i + 1,
+                type: action.type
+            };
+
+            console.log(`[SESSION ${sessionId}] STEP ${i + 1}: ${action.type}`);
 
             switch (action.type) {
 
-                // --------------------
-                // NAVEGACIÓN
-                // --------------------
                 case "goto":
                     await page.goto(action.url, {
-                        waitUntil: "domcontentloaded"
+                        waitUntil: "domcontentloaded",
+                        timeout: options.timeout || 30000
                     });
-                    result = { url: action.url };
-                    break;
-
-                case "wait":
-                    await page.waitForTimeout(action.milliseconds || 1000);
-                    result = { waited: action.milliseconds || 1000 };
-                    break;
-
-                case "reload":
-                    await page.reload();
-                    result = { reloaded: true };
-                    break;
-
-                case "back":
-                    await page.goBack();
-                    result = { back: true };
-                    break;
-
-                case "forward":
-                    await page.goForward();
-                    result = { forward: true };
-                    break;
-
-                // --------------------
-                // INTERACCIÓN
-                // --------------------
-                case "click":
-                    await page.click(action.selector, { timeout: 30000 });
-                    result = { clicked: action.selector };
-                    break;
-
-                case "dblclick":
-                    await page.dblclick(action.selector);
-                    result = { dblclicked: action.selector };
                     break;
 
                 case "fill":
-                    await page.fill(action.selector, action.text || "");
-                    result = { filled: action.selector };
+                    await page.fill(action.selector, action.text);
                     break;
 
-                case "type":
-                    await page.type(action.selector, action.text || "", {
-                        delay: action.delay || 50
-                    });
-                    result = { typed: action.selector };
+                case "click":
+                    await page.click(action.selector);
                     break;
 
                 case "press":
                     await page.keyboard.press(action.key);
-                    result = { key: action.key };
                     break;
 
-                case "hover":
-                    await page.hover(action.selector);
-                    result = { hover: action.selector };
+                case "wait":
+                    await page.waitForTimeout(action.ms || 1000);
                     break;
 
-                // --------------------
-                // EXTRACCIÓN
-                // --------------------
-                case "title":
-                    result = await page.title();
-                    break;
-
-                case "html":
-                    result = await page.content();
-                    break;
-
-                case "text":
-                    result = await page.textContent(action.selector);
-                    break;
-
-                case "attribute":
-                    result = await page.getAttribute(action.selector, action.name);
-                    break;
-
-                case "url":
-                    result = page.url();
-                    break;
-
-                // --------------------
-                // SCREENSHOT
-                // --------------------
                 case "screenshot":
-                    const path = `screenshots/screen_${Date.now()}_${i}.png`;
-
-                    await page.screenshot({
-                        path,
-                        fullPage: action.fullPage !== false
-                    });
-
-                    result = { path };
                     break;
 
-                // --------------------
-                // EVALUATE JS
-                // --------------------
-                case "evaluate":
-                    result = await page.evaluate(action.code);
-                    break;
-
-                // --------------------
-                // DEFAULT
-                // --------------------
                 default:
-                    throw new Error(`Unknown action type: ${action.type}`);
+                    throw new Error(`Unknown action: ${action.type}`);
             }
 
-            results.push({
-                step: i + 1,
-                type: action.type,
-                status: "ok",
-                result
-            });
+            if (options.screenshot) {
+                const file = `step_${sessionId}_${i + 1}.png`;
+                const filePath = path.join(screenshotDir, file);
 
-        } catch (err) {
+                await page.screenshot({ path: filePath });
 
+                result.screenshot = file;
+            }
+
+            result.status = "ok";
+            results.push(result);
+
+        } catch (error) {
             results.push({
                 step: i + 1,
                 type: action.type,
                 status: "error",
-                error: err.message
+                error: error.message
             });
+
+            console.error(`[ERROR] session=${sessionId}`, error.message);
+
+            if (options.stopOnError !== false) {
+                break;
+            }
         }
     }
 
     return {
-        success: true,
-        executionTime: Date.now() - startTime,
-        steps: results
+        ok: true,
+        sessionId,
+        results
     };
 }
 
