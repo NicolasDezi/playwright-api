@@ -11,6 +11,9 @@ const {
 
 const app = express();
 
+/**
+ * Middleware
+ */
 app.use(express.json({ limit: "10mb" }));
 
 /**
@@ -30,15 +33,15 @@ app.post("/session/create", async (req, res) => {
     try {
         const sessionId = await createSession();
 
-        res.json({
+        return res.json({
             ok: true,
             sessionId
         });
 
     } catch (error) {
-        console.error("Error creating session:", error);
+        console.error("[SESSION CREATE ERROR]", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             ok: false,
             error: error.message
         });
@@ -50,12 +53,6 @@ app.post("/session/create", async (req, res) => {
  * 2. EJECUTAR ACCIONES
  * -------------------------------------------------
  * POST /run
- *
- * body:
- * {
- *   sessionId: "abc123",
- *   actions: [...]
- * }
  */
 app.post("/run", async (req, res) => {
     try {
@@ -68,7 +65,7 @@ app.post("/run", async (req, res) => {
             });
         }
 
-        if (!actions || !Array.isArray(actions)) {
+        if (!Array.isArray(actions)) {
             return res.status(400).json({
                 ok: false,
                 error: "actions must be an array"
@@ -77,12 +74,12 @@ app.post("/run", async (req, res) => {
 
         const result = await executeActions(actions, sessionId);
 
-        res.json(result);
+        return res.json(result);
 
     } catch (error) {
-        console.error("Error executing actions:", error);
+        console.error("[RUN ERROR]", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             ok: false,
             error: error.message
         });
@@ -108,16 +105,16 @@ app.post("/session/close", async (req, res) => {
 
         await closeSession(sessionId);
 
-        res.json({
+        return res.json({
             ok: true,
             closed: true,
             sessionId
         });
 
     } catch (error) {
-        console.error("Error closing session:", error);
+        console.error("[SESSION CLOSE ERROR]", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             ok: false,
             error: error.message
         });
@@ -126,11 +123,25 @@ app.post("/session/close", async (req, res) => {
 
 /**
  * -------------------------------------------------
- * START SERVER
+ * START SERVER (EASYPANEL READY)
  * -------------------------------------------------
  */
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
-app.listen(PORT, () => {
-    console.log(`Playwright API running on port ${PORT}`);
+const server = app.listen(PORT, () => {
+    console.log("====================================");
+    console.log("🚀 Playwright API running");
+    console.log(`🌐 Port: ${PORT}`);
+    console.log("====================================");
+});
+
+/**
+ * Graceful shutdown (PRO)
+ */
+process.on("SIGTERM", () => {
+    console.log("SIGTERM received. Closing server...");
+    server.close(() => {
+        console.log("Server closed.");
+        process.exit(0);
+    });
 });
