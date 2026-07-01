@@ -14,10 +14,6 @@ async function executeActions(actions, sessionId, options = {}) {
 
     const session = getSession(sessionId);
 
-    if (!session) {
-        throw new Error(`Session not found: ${sessionId}`);
-    }
-
     const page = session.page;
 
     const results = [];
@@ -33,14 +29,16 @@ async function executeActions(actions, sessionId, options = {}) {
         const action = actions[i];
 
         const result = {
+
             step: i + 1,
             type: action.type
+
         };
 
         try {
 
             console.log(
-                `[SESSION ${sessionId}] STEP ${i + 1} -> ${action.type}`
+                `[SESSION ${sessionId}] STEP ${i + 1}: ${action.type}`
             );
 
             switch (action.type) {
@@ -53,9 +51,36 @@ async function executeActions(actions, sessionId, options = {}) {
                 case "goto":
 
                     await page.goto(action.url, {
-                        waitUntil: action.waitUntil || "domcontentloaded",
-                        timeout: action.timeout || options.timeout || 30000
+
+                        waitUntil: "networkidle",
+                        timeout: action.timeout || options.timeout || 60000
+
                     });
+
+                    await page.waitForTimeout(3000);
+
+                    console.log("URL:", page.url());
+
+                    console.log(
+                        "TITLE:",
+                        await page.title()
+                    );
+
+                    try {
+
+                        const body =
+                            await page.locator("body").innerText();
+
+                        console.log(
+                            "BODY:",
+                            body.substring(0, 200)
+                        );
+
+                    } catch (e) {
+
+                        console.log("BODY: unable to read");
+
+                    }
 
                     break;
 
@@ -86,7 +111,7 @@ async function executeActions(actions, sessionId, options = {}) {
 
                 /**
                  * ----------------------------------------
-                 * PRESS KEY
+                 * PRESS
                  * ----------------------------------------
                  */
                 case "press":
@@ -110,23 +135,50 @@ async function executeActions(actions, sessionId, options = {}) {
 
                 /**
                  * ----------------------------------------
-                 * SCREENSHOT ACTION
+                 * SCREENSHOT
                  * ----------------------------------------
                  */
                 case "screenshot": {
+
+                    console.log("Taking screenshot...");
+                    console.log("URL:", page.url());
+
+                    console.log(
+                        "TITLE:",
+                        await page.title()
+                    );
+
+                    try {
+
+                        const body =
+                            await page.locator("body").innerText();
+
+                        console.log(
+                            "BODY:",
+                            body.substring(0, 200)
+                        );
+
+                    } catch (e) {
+
+                        console.log("BODY: unable to read");
+
+                    }
 
                     const filename =
                         action.filename ||
                         `step_${sessionId}_${Date.now()}.png`;
 
-                    const filePath = path.join(
-                        screenshotDir,
-                        filename
-                    );
+                    const filePath =
+                        path.join(
+                            screenshotDir,
+                            filename
+                        );
 
                     await page.screenshot({
+
                         path: filePath,
                         fullPage: action.fullPage ?? true
+
                     });
 
                     result.file = filename;
@@ -134,58 +186,62 @@ async function executeActions(actions, sessionId, options = {}) {
                     break;
                 }
 
-                /**
-                 * ----------------------------------------
-                 * UNKNOWN
-                 * ----------------------------------------
-                 */
                 default:
 
                     throw new Error(
                         `Unknown action: ${action.type}`
                     );
+
             }
 
             /**
-             * Screenshot after every step (debug mode)
+             * Debug Screenshot
              */
             if (options.screenshot === true) {
 
                 const filename =
                     `debug_${sessionId}_${i + 1}.png`;
 
-                const filePath = path.join(
-                    screenshotDir,
-                    filename
-                );
+                const filePath =
+                    path.join(
+                        screenshotDir,
+                        filename
+                    );
 
                 await page.screenshot({
+
                     path: filePath,
                     fullPage: true
+
                 });
 
                 result.debugScreenshot = filename;
+
             }
 
             result.status = "ok";
 
         }
+
         catch (error) {
+
+            console.error(error);
 
             result.status = "error";
             result.error = error.message;
-
-            console.error(error);
 
             if (options.stopOnError !== false) {
 
                 results.push(result);
 
                 return {
+
                     ok: false,
                     sessionId,
                     results
+
                 };
+
             }
 
         }
@@ -206,18 +262,38 @@ async function executeActions(actions, sessionId, options = {}) {
 
 /**
  * ===========================================================
- * TAKE SCREENSHOT API
+ * TAKE SCREENSHOT
  * ===========================================================
  */
 async function takeScreenshot(sessionId) {
 
     const session = getSession(sessionId);
 
-    if (!session) {
-        throw new Error(`Session not found: ${sessionId}`);
-    }
-
     const page = session.page;
+
+    console.log("Taking API Screenshot...");
+    console.log("URL:", page.url());
+
+    console.log(
+        "TITLE:",
+        await page.title()
+    );
+
+    try {
+
+        const body =
+            await page.locator("body").innerText();
+
+        console.log(
+            "BODY:",
+            body.substring(0, 200)
+        );
+
+    } catch (e) {
+
+        console.log("BODY: unable to read");
+
+    }
 
     const buffer = await page.screenshot({
 
