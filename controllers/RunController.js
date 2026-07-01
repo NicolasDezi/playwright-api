@@ -1,4 +1,4 @@
-const ActionExecutor = require("../services/ActionExecutor");
+const ActionExecutor = require("../services/actionExecutor");
 const SessionService = require("../services/SessionService");
 
 module.exports = {

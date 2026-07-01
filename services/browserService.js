@@ -1,41 +1,107 @@
+// services/browserService.js
 const { chromium } = require("playwright");
 
-let browser = null;
-let context = null;
-let page = null;
+const sessions = new Map();
 
-async function launchBrowser() {
-    if (!browser) {
-        browser = await chromium.launch({
-            headless: process.env.HEADLESS !== "false",
-            args: ["--no-sandbox", "--disable-setuid-sandbox"]
-        });
+/**
+ * Create a new browser session
+ */
+async function createSession(sessionId) {
+  if (sessions.has(sessionId)) {
+    return sessions.get(sessionId);
+  }
 
-        context = await browser.newContext();
-        page = await context.newPage();
-    }
+  const browser = await chromium.launch({
+    headless: true,
+  });
 
-    return { browser, context, page };
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  const session = {
+    browser,
+    context,
+    page,
+  };
+
+  sessions.set(sessionId, session);
+
+  console.log(`[SESSION CREATED] ${sessionId}`);
+
+  return session;
 }
 
-async function getPage() {
-    if (!page) {
-        await launchBrowser();
-    }
-    return page;
+/**
+ * Get existing session
+ */
+function getSession(sessionId) {
+  const session = sessions.get(sessionId);
+
+  if (!session) {
+    throw new Error(`Session not found: ${sessionId}`);
+  }
+
+  return session;
 }
 
-async function closeBrowser() {
-    if (browser) {
-        await browser.close();
-        browser = null;
-        context = null;
-        page = null;
-    }
+/**
+ * Navigate
+ */
+async function goto(sessionId, url) {
+  const session = getSession(sessionId);
+  await session.page.goto(url);
+}
+
+/**
+ * Screenshot (FIX PRINCIPAL)
+ */
+async function takeScreenshot(sessionId, options = {}) {
+  const session = getSession(sessionId);
+
+  if (!session.page) {
+    throw new Error("Page not initialized in session");
+  }
+
+  return await session.page.screenshot({
+    fullPage: true,
+    ...options,
+  });
+}
+
+/**
+ * Click element
+ */
+async function click(sessionId, selector) {
+  const session = getSession(sessionId);
+  await session.page.click(selector);
+}
+
+/**
+ * Type text
+ */
+async function type(sessionId, selector, text) {
+  const session = getSession(sessionId);
+  await session.page.fill(selector, text);
+}
+
+/**
+ * Close session
+ */
+async function closeSession(sessionId) {
+  const session = sessions.get(sessionId);
+
+  if (session) {
+    await session.browser.close();
+    sessions.delete(sessionId);
+  }
 }
 
 module.exports = {
-    launchBrowser,
-    getPage,
-    closeBrowser
+  createSession,
+  getSession,
+  goto,
+  click,
+  type,
+  takeScreenshot,
+  closeSession,
 };
