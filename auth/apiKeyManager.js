@@ -1,40 +1,35 @@
 const crypto = require("crypto");
+const db = require("../db");
 
-const users = new Map();
-
-/**
- * CREATE USER + API KEY
- */
-function createUser(name) {
-
-    const apiKey = crypto.randomBytes(24).toString("hex");
+async function createUser(name) {
 
     const user = {
         id: crypto.randomUUID(),
         name,
-        apiKey,
-        createdAt: Date.now(),
-        usage: {
-            requests: 0
-        }
+        apiKey: crypto.randomBytes(24).toString("hex"),
+        createdAt: Date.now()
     };
 
-    users.set(apiKey, user);
+    await db.query(
+        `INSERT INTO users (id, name, api_key, created_at)
+         VALUES ($1, $2, $3, $4)`,
+        [user.id, user.name, user.apiKey, user.createdAt]
+    );
 
     return user;
 }
 
-/**
- * GET USER BY API KEY
- */
-function getUser(apiKey) {
-    return users.get(apiKey);
+async function getUserByKey(apiKey) {
+
+    const res = await db.query(
+        `SELECT * FROM users WHERE api_key = $1`,
+        [apiKey]
+    );
+
+    return res.rows[0];
 }
 
-/**
- * MIDDLEWARE AUTH
- */
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
 
     const apiKey = req.headers["x-api-key"];
 
@@ -45,7 +40,7 @@ function authMiddleware(req, res, next) {
         });
     }
 
-    const user = getUser(apiKey);
+    const user = await getUserByKey(apiKey);
 
     if (!user) {
         return res.status(401).json({
@@ -54,15 +49,12 @@ function authMiddleware(req, res, next) {
         });
     }
 
-    user.usage.requests++;
-
     req.user = user;
-
     next();
 }
 
 module.exports = {
     createUser,
-    getUser,
+    getUserByKey,
     authMiddleware
 };

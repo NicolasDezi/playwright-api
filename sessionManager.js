@@ -1,74 +1,56 @@
+const crypto = require("crypto");
 const { chromium } = require("playwright");
-const { v4: uuidv4 } = require("uuid");
+const db = require("./db");
 
 const sessions = new Map();
 
-/**
- * CREATE SESSION (TENANT SAFE)
- */
 async function createSession(userId) {
 
-    const sessionId = uuidv4();
+    const id = crypto.randomUUID();
 
     const browser = await chromium.launch({
         headless: true,
         args: [
             "--no-sandbox",
-            "--disable-setuid-sandbox",
             "--disable-dev-shm-usage"
         ]
     });
 
-    const context = await browser.newContext({
-        viewport: {
-            width: 1920,
-            height: 1080
-        }
-    });
-
+    const context = await browser.newContext();
     const page = await context.newPage();
 
-    sessions.set(sessionId, {
-        userId,
-        browser,
-        context,
-        page,
-        createdAt: Date.now()
-    });
+    sessions.set(id, { browser, context, page, userId });
 
-    return sessionId;
+    await db.query(
+        `INSERT INTO sessions (id, user_id, created_at)
+         VALUES ($1, $2, $3)`,
+        [id, userId, Date.now()]
+    );
+
+    return id;
 }
 
-/**
- * GET SESSION (VALIDATE TENANT)
- */
-function getSession(sessionId, userId) {
+function getSession(id, userId) {
 
-    const session = sessions.get(sessionId);
+    const session = sessions.get(id);
 
-    if (!session) {
-        throw new Error("Session not found");
-    }
+    if (!session) throw new Error("Session not found");
 
-    if (session.userId !== userId) {
-        throw new Error("Unauthorized session access");
-    }
+    if (session.userId !== userId)
+        throw new Error("Unauthorized");
 
     return session;
 }
 
-/**
- * CLOSE SESSION
- */
-async function closeSession(sessionId) {
+async function closeSession(id) {
 
-    const session = sessions.get(sessionId);
+    const session = sessions.get(id);
 
     if (!session) return;
 
     await session.browser.close();
 
-    sessions.delete(sessionId);
+    sessions.delete(id);
 }
 
 module.exports = {

@@ -1,66 +1,54 @@
 const path = require("path");
 const fs = require("fs");
 
-const { getSession } = require("../sessionManager");
-const { log } = require("./sessionLogger");
+const config = require("../config/config");
+const db = require("../db/connection");
+const SessionService = require("./SessionService");
+
+const screenshotDir = path.join(__dirname, "..", "storage", "screenshots");
+
+/**
+ * Asegurar directorio
+ */
+if (!fs.existsSync(screenshotDir)) {
+    fs.mkdirSync(screenshotDir, { recursive: true });
+}
 
 /**
  * ==========================================================
- * EXECUTE ACTIONS (PRODUCTION CORE)
+ * EXECUTE ACTIONS (PRO)
  * ==========================================================
  */
-async function executeActions(actions, sessionId, options = {}) {
+async function execute(actions, sessionId, options = {}) {
 
-    const session = await getSession(sessionId);
-
+    const session = SessionService.get(sessionId);
     const page = session.page;
 
     const results = [];
 
-    const screenshotDir = path.join(__dirname, "..", "screenshots");
-
-    if (!fs.existsSync(screenshotDir)) {
-        fs.mkdirSync(screenshotDir, { recursive: true });
-    }
-
-    log(sessionId, {
-        type: "session_start",
-        actions: actions.length
-    });
-
     for (let i = 0; i < actions.length; i++) {
 
         const action = actions[i];
+        const start = Date.now();
 
-        const result = {
+        const logId = await createLog({
+            sessionId,
+            action: action.type,
             step: i + 1,
-            type: action.type
-        };
+            status: "running"
+        });
 
         try {
 
-            console.log(
-                `[SESSION ${sessionId}] STEP ${i + 1} -> ${action.type}`
-            );
+            console.log(`[SESSION ${sessionId}] STEP ${i + 1}: ${action.type}`);
 
-            log(sessionId, {
-                type: "action_start",
-                step: i + 1,
-                action: action.type
-            });
-
-            /**
-             * =========================
-             * ACTION ROUTER
-             * =========================
-             */
             switch (action.type) {
 
                 case "goto":
 
                     await page.goto(action.url, {
                         waitUntil: action.waitUntil || "networkidle",
-                        timeout: action.timeout || 60000
+                        timeout: config.playwright.navigationTimeout
                     });
 
                     await page.waitForTimeout(2000);
@@ -70,17 +58,14 @@ async function executeActions(actions, sessionId, options = {}) {
                 case "click":
 
                     await page.click(action.selector, {
-                        timeout: 30000
+                        timeout: config.playwright.actionTimeout
                     });
 
                     break;
 
                 case "fill":
 
-                    await page.fill(
-                        action.selector,
-                        action.text || ""
-                    );
+                    await page.fill(action.selector, action.text || "");
 
                     break;
 
@@ -96,109 +81,84 @@ async function executeActions(actions, sessionId, options = {}) {
 
                     break;
 
-                case "evaluate":
-
-                    result.value = await page.evaluate(action.script);
-                    break;
-
                 case "screenshot": {
 
-                    const filename =
-                        action.filename ||
-                        `step_${sessionId}_${Date.now()}.png`;
-
-                    const filePath = path.join(
-                        screenshotDir,
-                        filename
-                    );
+                    const filename = `step_${sessionId}_${Date.now()}.png`;
+                    const filePath = path.join(screenshotDir, filename);
 
                     await page.screenshot({
                         path: filePath,
                         fullPage: action.fullPage ?? true
                     });
 
-                    result.file = filename;
+                    await updateLog(logId, {
+                        screenshot: filename
+                    });
 
-                    break;
+                    results.push({
+                        step: i + 1,
+                        type: action.type,
+                        file: filename,
+                        status: "ok"
+                    });
+
+                    continue;
                 }
 
                 default:
                     throw new Error(`Unknown action: ${action.type}`);
             }
 
+            const duration = Date.now() - start;
+
+            await updateLog(logId, {
+                status: "ok",
+                duration
+            });
+
+            results.push({
+                step: i + 1,
+                type: action.type,
+                status: "ok",
+                duration
+            });
+
             /**
-             * DEBUG LOGS (OPTIONAL)
+             * DEBUG SCREENSHOT (opcional)
              */
-            if (options.debug === true) {
-
-                const url = page.url();
-                const title = await page.title();
-
-                console.log("URL:", url);
-                console.log("TITLE:", title);
-            }
-
-            /**
-             * AUTO DEBUG SCREENSHOT
-             */
-            if (options.screenshot === true) {
+            if (options.debugScreenshots) {
 
                 const filename = `debug_${sessionId}_${i + 1}.png`;
-
                 const filePath = path.join(screenshotDir, filename);
 
-                await page.screenshot({
-                    path: filePath,
-                    fullPage: true
-                });
+                await page.screenshot({ path: filePath });
 
-                result.debugScreenshot = filename;
             }
-
-            result.status = "ok";
-
-            log(sessionId, {
-                type: "action_success",
-                step: i + 1,
-                action: action.type
-            });
 
         } catch (error) {
 
-            console.error(`[ERROR] session=${sessionId}`, error.message);
+            const duration = Date.now() - start;
 
-            result.status = "error";
-            result.error = error.message;
-
-            log(sessionId, {
-                type: "action_error",
-                step: i + 1,
-                action: action.type,
-                message: error.message
+            await updateLog(logId, {
+                status: "error",
+                message: error.message,
+                duration
             });
 
+            results.push({
+                step: i + 1,
+                type: action.type,
+                status: "error",
+                error: error.message
+            });
+
+            console.error(`[ERROR] session=${sessionId}`, error.message);
+
             if (options.stopOnError !== false) {
-                results.push(result);
-
-                log(sessionId, {
-                    type: "session_stopped",
-                    reason: "error"
-                });
-
-                return {
-                    ok: false,
-                    sessionId,
-                    results
-                };
+                break;
             }
         }
-
-        results.push(result);
     }
-
-    log(sessionId, {
-        type: "session_end"
-    });
 
     return {
         ok: true,
@@ -209,27 +169,55 @@ async function executeActions(actions, sessionId, options = {}) {
 
 /**
  * ==========================================================
- * SCREENSHOT API
+ * CREATE LOG
  * ==========================================================
  */
-async function takeScreenshot(sessionId) {
+async function createLog({ sessionId, action, step, status }) {
 
-    const session = await getSession(sessionId);
+    const result = await db.query(
+        `INSERT INTO execution_logs
+         (session_id, action, status, metadata)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id`,
+        [
+            sessionId,
+            action,
+            status,
+            JSON.stringify({ step })
+        ]
+    );
 
-    const page = session.page;
+    return result.rows[0].id;
+}
 
-    const buffer = await page.screenshot({
-        fullPage: true,
-        type: "png"
-    });
+/**
+ * ==========================================================
+ * UPDATE LOG
+ * ==========================================================
+ */
+async function updateLog(id, data) {
 
-    return {
-        sessionId,
-        screenshot: buffer.toString("base64")
-    };
+    const fields = [];
+    const values = [];
+    let index = 1;
+
+    for (const key in data) {
+        fields.push(`${key} = $${index}`);
+        values.push(data[key]);
+        index++;
+    }
+
+    values.push(id);
+
+    const query = `
+        UPDATE execution_logs
+        SET ${fields.join(", ")}
+        WHERE id = $${index}
+    `;
+
+    await db.query(query, values);
 }
 
 module.exports = {
-    executeActions,
-    takeScreenshot
+    execute
 };

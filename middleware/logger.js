@@ -1,100 +1,60 @@
+const db = require("../db/connection");
+
 /**
  * ==========================================================
- * LOGGER MIDDLEWARE (PRODUCTION READY)
+ * LOG EXECUTION
  * ==========================================================
  */
+async function logExecution({
+    userId = null,
+    sessionId = null,
+    workflowId = null,
+    status = "SUCCESS",
+    action = null,
+    message = null,
+    metadata = {}
+}) {
 
-const config = require("../config/config");
+    try {
 
-/**
- * Format timestamp
- */
-function getTimestamp() {
-    return new Date().toISOString();
-}
+        await db.query(
+            `
+            INSERT INTO execution_logs
+            (
+                user_id,
+                session_id,
+                workflow_id,
+                status,
+                action,
+                message,
+                metadata,
+                created_at
+            )
+            VALUES
+            (
+                $1,$2,$3,$4,$5,$6,$7,NOW()
+            )
+            `,
+            [
+                userId,
+                sessionId,
+                workflowId,
+                status,
+                action,
+                message,
+                JSON.stringify(metadata)
+            ]
+        );
 
-/**
- * Simple log printer
- */
-function log(level, message, data = {}) {
-    const timestamp = getTimestamp();
-
-    const logEntry = {
-        timestamp,
-        level,
-        message,
-        ...data
-    };
-
-    if (level === "error") {
-        console.error(JSON.stringify(logEntry));
-    } else if (level === "warn") {
-        console.warn(JSON.stringify(logEntry));
-    } else {
-        console.log(JSON.stringify(logEntry));
     }
-}
+    catch (err) {
 
-/**
- * Express middleware
- */
-function logger(req, res, next) {
-    if (!config.logging.requests) {
-        return next();
+        console.error("[LOGGER]", err.message);
+
     }
 
-    const start = Date.now();
-
-    const { method, originalUrl } = req;
-
-    log("info", "REQUEST_IN", {
-        method,
-        url: originalUrl,
-        ip: req.ip,
-        userAgent: req.headers["user-agent"]
-    });
-
-    res.on("finish", () => {
-        const duration = Date.now() - start;
-
-        log("info", "REQUEST_OUT", {
-            method,
-            url: originalUrl,
-            statusCode: res.statusCode,
-            durationMs: duration
-        });
-    });
-
-    next();
-}
-
-/**
- * Action logger (Playwright steps)
- */
-function logAction(sessionId, action, status, extra = {}) {
-    if (!config.logging.actions) return;
-
-    log("info", "ACTION", {
-        sessionId,
-        action,
-        status,
-        ...extra
-    });
-}
-
-/**
- * Error logger
- */
-function logError(error, context = {}) {
-    log("error", error.message || "Unknown error", {
-        stack: error.stack,
-        ...context
-    });
 }
 
 module.exports = {
-    logger,
-    log,
-    logAction,
-    logError
+    logExecution
 };
