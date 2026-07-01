@@ -96,6 +96,23 @@ async function executeActions(actions, sessionId, options = {}) {
     };
 }
 
+async function takeScreenshot(sessionId) {
+    const session = global.sessions?.get(sessionId);
+
+    if (!session) throw new Error("Session not found");
+
+    const buffer = await session.page.screenshot({
+        fullPage: true
+    });
+
+    return buffer.toString("base64");
+}
+
+module.exports = {
+    executeActions,
+    takeScreenshot
+};
+
 module.exports = {
     executeActions
 };

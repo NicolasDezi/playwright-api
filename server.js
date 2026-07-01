@@ -2,36 +2,41 @@ const express = require("express");
 
 const {
     createSession,
-    closeSession
+    closeSession,
+    getSession // opcional si lo tenés o lo agregás
 } = require("./sessionManager");
 
 const {
-    executeActions
+    executeActions,
+    takeScreenshot // 👈 NUEVO (lo agregamos abajo)
 } = require("./services/actionExecutor");
 
 const app = express();
 
-/**
- * -------------------------------------------------
- * MIDDLEWARE
- * -------------------------------------------------
- */
 app.use(express.json({ limit: "10mb" }));
 
 /**
  * -------------------------------------------------
- * HEALTHCHECK
+ * LOG MIDDLEWARE (DEBUG PRO)
  * -------------------------------------------------
+ */
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
+
+/**
+ * HEALTH CHECK
  */
 app.get("/", (req, res) => {
     res.send("Playwright API OK");
 });
 
 app.get("/health", (req, res) => {
-    res.status(200).json({
+    res.json({
         ok: true,
         uptime: process.uptime(),
-        timestamp: new Date().toISOString()
+        memory: process.memoryUsage()
     });
 });
 
@@ -39,152 +44,142 @@ app.get("/health", (req, res) => {
  * -------------------------------------------------
  * 1. CREATE SESSION
  * -------------------------------------------------
- * POST /session/create
  */
 app.post("/session/create", async (req, res) => {
     try {
         const sessionId = await createSession();
 
-        return res.json({
+        res.json({
             ok: true,
             sessionId
         });
 
-    } catch (error) {
-        console.error("[SESSION CREATE ERROR]", error);
-
-        return res.status(500).json({
-            ok: false,
-            error: error.message
-        });
+    } catch (err) {
+        console.error("[SESSION CREATE ERROR]", err);
+        res.status(500).json({ ok: false, error: err.message });
     }
 });
 
 /**
  * -------------------------------------------------
- * 2. EXECUTE ACTIONS ENGINE
+ * 2. RUN ACTIONS
  * -------------------------------------------------
- * POST /run
- *
- * body:
- * {
- *   sessionId,
- *   actions: [],
- *   options: {
- *      screenshot: true,
- *      stopOnError: true,
- *      timeout: 30000
- *   }
- * }
  */
 app.post("/run", async (req, res) => {
     try {
-        const {
-            sessionId,
-            actions,
-            options = {}
-        } = req.body;
+        const { sessionId, actions } = req.body;
 
         if (!sessionId) {
-            return res.status(400).json({
-                ok: false,
-                error: "sessionId is required"
-            });
+            return res.status(400).json({ ok: false, error: "sessionId required" });
         }
 
-        if (!Array.isArray(actions)) {
-            return res.status(400).json({
-                ok: false,
-                error: "actions must be an array"
-            });
-        }
+        const result = await executeActions(actions, sessionId);
 
-        console.log(`[RUN START] session=${sessionId} actions=${actions.length}`);
-
-        const result = await executeActions(actions, sessionId, options);
-
-        console.log(`[RUN END] session=${sessionId}`);
-
-        return res.json(result);
-
-    } catch (error) {
-        console.error("[RUN ERROR]", error);
-
-        return res.status(500).json({
-            ok: false,
-            error: error.message
+        res.json({
+            ok: true,
+            result
         });
+
+    } catch (err) {
+        console.error("[RUN ERROR]", err);
+        res.status(500).json({ ok: false, error: err.message });
     }
 });
 
 /**
  * -------------------------------------------------
- * 3. CLOSE SESSION
+ * 3. SCREENSHOT (FASE 3 🔥)
  * -------------------------------------------------
- * POST /session/close
+ * POST /screenshot
+ * body: { sessionId }
  */
-app.post("/session/close", async (req, res) => {
+app.post("/screenshot", async (req, res) => {
     try {
         const { sessionId } = req.body;
 
         if (!sessionId) {
             return res.status(400).json({
                 ok: false,
-                error: "sessionId is required"
+                error: "sessionId required"
             });
         }
 
-        await closeSession(sessionId);
+        const screenshot = await takeScreenshot(sessionId);
 
-        return res.json({
+        res.json({
             ok: true,
-            closed: true,
-            sessionId
+            sessionId,
+            screenshot // base64
         });
 
-    } catch (error) {
-        console.error("[SESSION CLOSE ERROR]", error);
-
-        return res.status(500).json({
-            ok: false,
-            error: error.message
-        });
+    } catch (err) {
+        console.error("[SCREENSHOT ERROR]", err);
+        res.status(500).json({ ok: false, error: err.message });
     }
 });
 
 /**
  * -------------------------------------------------
- * SERVER START
+ * 4. SESSION CLOSE
+ * -------------------------------------------------
+ */
+app.post("/session/close", async (req, res) => {
+    try {
+        const { sessionId } = req.body;
+
+        await closeSession(sessionId);
+
+        res.json({
+            ok: true,
+            closed: true
+        });
+
+    } catch (err) {
+        console.error("[SESSION CLOSE ERROR]", err);
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+/**
+ * -------------------------------------------------
+ * 5. SESSION DEBUG (PRO INSPECTION)
+ * -------------------------------------------------
+ */
+app.get("/session/:id", (req, res) => {
+    const { id } = req.params;
+
+    res.json({
+        ok: true,
+        sessionId: id,
+        status: "active",
+        message: "Debug endpoint (extend sessionManager if needed)"
+    });
+});
+
+/**
+ * -------------------------------------------------
+ * START SERVER
  * -------------------------------------------------
  */
 const PORT = process.env.PORT || 8080;
 
 const server = app.listen(PORT, "0.0.0.0", () => {
     console.log("====================================");
-    console.log("🚀 Playwright API running (PRO MODE)");
+    console.log("🚀 Playwright API (FASE 3)");
     console.log("🌐 Port:", PORT);
     console.log("====================================");
 });
 
 /**
  * -------------------------------------------------
- * GRACEFUL SHUTDOWN (EASYPANEL SAFE)
+ * GRACEFUL SHUTDOWN (FIXED)
  * -------------------------------------------------
  */
-process.on("SIGTERM", () => {
-    console.log("SIGTERM received. Shutting down...");
+process.on("SIGTERM", async () => {
+    console.log("SIGTERM received... closing server");
 
     server.close(() => {
-        console.log("Server closed cleanly.");
-        process.exit(0);
-    });
-});
-
-process.on("SIGINT", () => {
-    console.log("SIGINT received. Shutting down...");
-
-    server.close(() => {
-        console.log("Server closed cleanly.");
+        console.log("Server closed");
         process.exit(0);
     });
 });
